@@ -41,7 +41,12 @@ def random_dril_tweet(tweet_file):
     return tweets[0]
 
 
-def add_tweets_to_db(tweet_file):
+def add_tweets_to_mongodb(tweet_file):
+    """
+    'Nuffs aid.  Need I say more? Nuff said. Need I say more?  
+    Nuff said.  Need i say more?  Nuff said.  Need I say more?  
+    Nuff said.  Need I say'
+    """
     client = MongoClient()
     db = client.dril_tweets
     tweets_db  = db.tweets
@@ -49,40 +54,62 @@ def add_tweets_to_db(tweet_file):
         for tweet in tweets:
             try:
                 post_id, timestamp, post = tweet.strip().split('|', 2)
-                in_db = tweets_db.find( { 'post_id': post_id } )
 
-                if in_db.count() == 0:
-                    result = tweets_db.insert_one(
-                                { 'post_id': post_id, 
-                                  'timestamp': timestamp, 
-                                  'post': post } )
-                    if not result.acknowledged:
-                        print("an error")
-                        print(post)
-                        pass # TODO log error somehow.
+            # there are several lines, apparently from old tweets, that 
+            # are just fragments of a tweet. I think Twitter changed 
+            # how newlines are represented in tweets and that has to 
+            # do with it?
+            # anyway they cause ValueErrors when trying to unpack 
+            # via str.split() above
             except ValueError as e:
-                print("an error: {}", e)
-                pass
+                pass # TODO better logging
+            in_db = tweets_db.find( { 'post_id': post_id } )
+
+            if in_db.count() == 0:
+                result = tweets_db.insert_one(
+                            { 'post_id': post_id, 
+                                'timestamp': timestamp, 
+                                'post': post } )
+                if not result.acknowledged:
+                    pass # TODO better logging
+            else:
+                break # we've found all the new tweets
 
     client.close()
+
+
+def random_dril_tweet_from_mongodb():
+    """
+    'polease cut all art programs so we can instead focus on teaching 
+    our children the importance of being Respectful towards influencers'
+    """
+    client = MongoClient()
+    db = client.dril_tweets
+    tweets_db = db.tweets
+    tweet_count = tweets_db.count() - 1
+    which_tweet = random.randint(0, tweet_count)
+    cursor = tweets_db.find({})
+    tweet = cursor.skip(which_tweet).next()
+    client.close()
+    return tweet['post']
+
 
 def main():
     """
     'most of my material is never recorded or heard by human ears'
     """
-    if not os.path.exists(TWEET_FILE_NAME):
-        get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
-    else:
-        file_age = os.path.getmtime(TWEET_FILE_NAME)
-        now = calendar.timegm(time.gmtime())
-        if now - file_age > 172800: # two days
-            get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
-    
     if 'mongo' in sys.argv:
-        print('mongo')
-        add_tweets_to_db(TWEET_FILE_NAME)
-        sys.exit(0)
-    print(random_dril_tweet(TWEET_FILE_NAME))
+        add_tweets_to_mongodb(TWEET_FILE_NAME)
+        print(random_dril_tweet_from_mongodb())
+    else:
+        if not os.path.exists(TWEET_FILE_NAME):
+            get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
+        else:
+            file_age = os.path.getmtime(TWEET_FILE_NAME)
+            now = calendar.timegm(time.gmtime())
+            if now - file_age > 172800: # two days
+                get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
+    
     sys.exit(0)
 
 
