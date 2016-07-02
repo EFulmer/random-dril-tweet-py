@@ -8,6 +8,8 @@ import subprocess
 import sys
 import time
 
+from pymongo import MongoClient
+
 
 TWEET_FILE_NAME = 'dril.txt'
 TWEET_URL_NAME = 'http://greptweet.com/u/dril/dril.txt'
@@ -39,6 +41,31 @@ def random_dril_tweet(tweet_file):
     return tweets[0]
 
 
+def add_tweets_to_db(tweet_file):
+    client = MongoClient()
+    db = client.dril_tweets
+    tweets_db  = db.tweets
+    with open(tweet_file, 'r') as tweets:
+        for tweet in tweets:
+            try:
+                post_id, timestamp, post = tweet.strip().split('|', 2)
+                in_db = tweets_db.find( { 'post_id': post_id } )
+
+                if in_db.count() == 0:
+                    result = tweets_db.insert_one(
+                                { 'post_id': post_id, 
+                                  'timestamp': timestamp, 
+                                  'post': post } )
+                    if not result.acknowledged:
+                        print("an error")
+                        print(post)
+                        pass # TODO log error somehow.
+            except ValueError as e:
+                print("an error: {}", e)
+                pass
+
+    client.close()
+
 def main():
     """
     'most of my material is never recorded or heard by human ears'
@@ -50,9 +77,14 @@ def main():
         now = calendar.timegm(time.gmtime())
         if now - file_age > 172800: # two days
             get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
+    
+    if 'mongo' in sys.argv:
+        print('mongo')
+        add_tweets_to_db(TWEET_FILE_NAME)
+        sys.exit(0)
     print(random_dril_tweet(TWEET_FILE_NAME))
     sys.exit(0)
 
 
 if __name__ == '__main__':
-	main()
+    main()
