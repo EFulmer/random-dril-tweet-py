@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 """
-which programming language should I learn if I want to transform myself
-into an enormous 3d wireframe head that spits out flashing cubes
+'which programming language should I learn if I want to transform myself
+into an enormous 3d wireframe head that spits out flashing cubes'
 """
 
 from __future__ import print_function
@@ -68,13 +68,13 @@ def add_tweets_to_mongodb(tweet_file):
             # anyway they cause ValueErrors when trying to unpack
             # via str.split() above
             except IndexError:
-                continue # TODO better logging
+                continue
             in_db = tweets_col.find({'post': post})
 
             if in_db.count() == 0:
                 result = tweets_col.insert_one({'post': post})
                 if not result.acknowledged:
-                    pass # TODO better logging
+                    print('error adding tweet "{}" to MongoDB'.format(post))
             else:
                 break # we've found all the new tweets
 
@@ -100,8 +100,9 @@ def random_dril_tweet_from_mongodb():
 
 def add_tweets_to_redis(tweet_file):
     """
-    DVD: FBI WARNING Me: oh boy here we go DVD: The board advises you
-    to have lots of fun watching this Hollywood movie Me: Ah.. It's a nice one
+    'DVD: FBI WARNING Me: oh boy here we go DVD: The board advises you
+    to have lots of fun watching this Hollywood movie Me: Ah.. It's a
+    nice one'
     """
     redis_client = StrictRedis(host='localhost', port=6379, db=0)
     with open(tweet_file, 'r') as tweets:
@@ -114,8 +115,9 @@ def add_tweets_to_redis(tweet_file):
                 # would be more efficient
                 if not redis_client.sismember('tweets', tweet):
                     result = redis_client.sadd('tweets', tweet)
-                    if not result: # TODO logging
-                        pass
+                    if not result:
+                        print('error occurred while adding tweet: "{}" to redis'
+                              .format(tweet))
                 else:
                     break # found all new tweets
             except IndexError:
@@ -135,6 +137,18 @@ def random_dril_tweet_from_redis():
     return tweet
 
 
+def update_tweet_file(tweet_file_name, tweet_url):
+    """
+    'ive heard from a reliable source that people arre putting their
+    lips on to my girl friends avatars and going "muah muah muah." cut
+    it out'
+    """
+    file_age = os.path.getmtime(tweet_file_name)
+    now = calendar.timegm(time.gmtime())
+    if now - file_age > (60 * 60 * 48): # two days
+        get_dril_tweets(tweet_url, tweet_file_name)
+
+
 def main():
     """
     'most of my material is never recorded or heard by human ears'
@@ -142,10 +156,7 @@ def main():
     if not os.path.exists(TWEET_FILE_NAME):
         get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
     else:
-        file_age = os.path.getmtime(TWEET_FILE_NAME)
-        now = calendar.timegm(time.gmtime())
-        if now - file_age > 172800: # two days
-            get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
+        update_tweet_file(TWEET_FILE_NAME, TWEET_URL_NAME)
     if 'mongo' in sys.argv:
         add_tweets_to_mongodb(TWEET_FILE_NAME)
         print(random_dril_tweet_from_mongodb())
