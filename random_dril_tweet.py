@@ -7,6 +7,7 @@ into an enormous 3d wireframe head that spits out flashing cubes'
 
 from __future__ import print_function
 
+import argparse
 import calendar
 import csv
 import os.path
@@ -153,18 +154,33 @@ def main():
     """
     'most of my material is never recorded or heard by human ears'
     """
-    if not os.path.exists(TWEET_FILE_NAME):
-        get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', '--data_source', choices=['mongo', 'redis'],
+                        help='the data store to store/access tweets from.' \
+                        'Accepted values are "mongo" and "redis". If no argument ' \
+                        'given, default to the text file.')
+    parser.add_argument('-f', '--tweetfile', help='file to store/access tweets from')
+    parser.add_argument('-u', '--url', help='url to text file containing dril tweets')
+    parser.add_argument('-c', '--color', help='color to print ' \
+            'tweets. defaults to your terminal\'s default text color')
+    args = parser.parse_args()
+
+    tweet_file = args.tweetfile if args.tweetfile else TWEET_FILE_NAME
+    tweet_url = args.url if args.url else TWEET_URL_NAME
+
+    if not os.path.exists(tweet_file):
+        get_dril_tweets(tweet_url, tweet_file)
     else:
-        update_tweet_file(TWEET_FILE_NAME, TWEET_URL_NAME)
-    if 'mongo' in sys.argv:
-        add_tweets_to_mongodb(TWEET_FILE_NAME)
+        update_tweet_file(tweet_file, tweet_url)
+
+    if args.data_source.lower() == 'mongo':
+        add_tweets_to_mongodb(tweet_file)
         print(random_dril_tweet_from_mongodb())
-    elif 'redis' in sys.argv:
-        add_tweets_to_redis(TWEET_FILE_NAME)
+    elif args.data_source.lower() == 'redis':
+        add_tweets_to_redis(tweet_file)
         print(random_dril_tweet_from_redis())
     else:
-        print(random_dril_tweet(TWEET_FILE_NAME))
+        print(random_dril_tweet(tweet_file))
 
     sys.exit(0)
 
