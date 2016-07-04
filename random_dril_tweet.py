@@ -16,6 +16,7 @@ import sys
 import time
 
 from pymongo import MongoClient
+from redis import StrictRedis
 
 
 TWEET_FILE_NAME = 'dril.txt'
@@ -38,13 +39,13 @@ def random_dril_tweet(tweet_file):
     designated as a "Hell Tweet", meaning if you reply to it , you will
     be blocked,'
     """
-    # TODO merging tweets that got split across lines
     tweets = []
     with open(tweet_file, 'r') as tweet_file_handle:
         reader = csv.reader(tweet_file_handle, delimiter='|')
         tweets = [line[-1] for line in reader if "http://" not in line[-1]]
     random.shuffle(tweets)
-    return tweets[0]
+    tweet = tweets[0].replace('dril.txt grep.php lock', '').replace('&amp;', '&')
+    return tweet
 
 
 def add_tweets_to_mongodb(tweet_file):
@@ -58,7 +59,7 @@ def add_tweets_to_mongodb(tweet_file):
     with open(tweet_file, 'r') as tweets:
         for tweet in tweets:
             try:
-                post_id, timestamp, post = tweet.strip().split('|', 2)
+                post = tweet.strip().split('|', 2)[2]
 
             # there are several lines, apparently from old tweets, that
             # are just fragments of a tweet. I think Twitter changed
@@ -66,14 +67,12 @@ def add_tweets_to_mongodb(tweet_file):
             # do with it?
             # anyway they cause ValueErrors when trying to unpack
             # via str.split() above
-            except ValueError:
-                pass # TODO better logging
-            in_db = tweets_col.find({'post_id': post_id})
+            except IndexError:
+                continue # TODO better logging
+            in_db = tweets_col.find({'post': post})
 
             if in_db.count() == 0:
-                result = tweets_col.insert_one({'post_id': post_id,
-                                               'timestamp': timestamp,
-                                               'post': post})
+                result = tweets_col.insert_one({'post': post})
                 if not result.acknowledged:
                     pass # TODO better logging
             else:
@@ -99,22 +98,61 @@ def random_dril_tweet_from_mongodb():
     return tweet['post']
 
 
+def add_tweets_to_redis(tweet_file):
+    """
+    DVD: FBI WARNING Me: oh boy here we go DVD: The board advises you
+    to have lots of fun watching this Hollywood movie Me: Ah.. It's a nice one
+    """
+    redis_client = StrictRedis(host='localhost', port=6379, db=0)
+    with open(tweet_file, 'r') as tweets:
+        for line in tweets:
+            # again, dealing with weird error here
+            try:
+                tweet = line.strip().split('|', 2)[2]
+                # need to investigate whether one-by-one inserting
+                # or building a list of tweets and doing a single insert
+                # would be more efficient
+                if not redis_client.sismember('tweets', tweet):
+                    result = redis_client.sadd('tweets', tweet)
+                    if not result: # TODO logging
+                        pass
+                else:
+                    break # found all new tweets
+            except IndexError:
+                continue
+    redis_client.save()
+
+
+def random_dril_tweet_from_redis():
+    """
+    to counter-act the terrible "ISIS", im starting my own group called
+    "NICEis". what we do is give retweets & faves to the
+    hopelessly decrepit
+    """
+    redis_client = StrictRedis(host='localhost', port=6379, db=0)
+    tweet = redis_client.srandmember('tweets')
+    tweet = tweet.decode('UTF-8')
+    return tweet
+
+
 def main():
     """
     'most of my material is never recorded or heard by human ears'
     """
+    if not os.path.exists(TWEET_FILE_NAME):
+        get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
+    else:
+        file_age = os.path.getmtime(TWEET_FILE_NAME)
+        now = calendar.timegm(time.gmtime())
+        if now - file_age > 172800: # two days
+            get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
     if 'mongo' in sys.argv:
         add_tweets_to_mongodb(TWEET_FILE_NAME)
         print(random_dril_tweet_from_mongodb())
+    elif 'redis' in sys.argv:
+        add_tweets_to_redis(TWEET_FILE_NAME)
+        print(random_dril_tweet_from_redis())
     else:
-        if not os.path.exists(TWEET_FILE_NAME):
-            get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
-        else:
-            file_age = os.path.getmtime(TWEET_FILE_NAME)
-            now = calendar.timegm(time.gmtime())
-            if now - file_age > 172800: # two days
-                get_dril_tweets(TWEET_URL_NAME, TWEET_FILE_NAME)
-
         print(random_dril_tweet(TWEET_FILE_NAME))
 
     sys.exit(0)
