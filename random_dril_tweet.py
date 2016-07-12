@@ -45,7 +45,8 @@ def random_dril_tweet(tweet_file):
         reader = csv.reader(tweet_file_handle, delimiter='|')
         tweets = [line[-1] for line in reader if "http://" not in line[-1]]
     random.shuffle(tweets)
-    tweet = tweets[0].replace('dril.txt grep.php lock', '').replace('&amp;', '&')
+    tweet = tweets[0].replace('dril.txt grep.php lock', '') \
+        .replace('&amp;', '&')
     return tweet
 
 
@@ -77,7 +78,8 @@ def add_tweets_to_mongodb(tweet_file):
                 if not result.acknowledged:
                     print('error adding tweet "{}" to MongoDB'.format(post))
             else:
-                break # we've found all the new tweets
+                # we've found all the new tweets
+                break
 
     client.close()
 
@@ -117,10 +119,11 @@ def add_tweets_to_redis(tweet_file):
                 if not redis_client.sismember('tweets', tweet):
                     result = redis_client.sadd('tweets', tweet)
                     if not result:
-                        print('error occurred while adding tweet: "{}" to redis'
+                        print('error occurred adding tweet: "{}" to redis'
                               .format(tweet))
                 else:
-                    break # found all new tweets
+                    # found all new tweets
+                    break
             except IndexError:
                 continue
     redis_client.save()
@@ -146,7 +149,8 @@ def update_tweet_file(tweet_file_name, tweet_url):
     """
     file_age = os.path.getmtime(tweet_file_name)
     now = calendar.timegm(time.gmtime())
-    if now - file_age > (60 * 60 * 48): # two days
+    # If file more than two days old:
+    if now - file_age > (60 * 60 * 48):
         get_dril_tweets(tweet_url, tweet_file_name)
 
 
@@ -156,31 +160,41 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('-s', '--data_source', choices=['mongo', 'redis'],
-                        help='the data store to store/access tweets from.' \
-                        'Accepted values are "mongo" and "redis". If no argument ' \
-                        'given, default to the text file.')
-    parser.add_argument('-f', '--tweetfile', help='file to store/access tweets from')
-    parser.add_argument('-u', '--url', help='url to text file containing dril tweets')
-    parser.add_argument('-c', '--color', help='color to print ' \
-            'tweets. defaults to your terminal\'s default text color')
+                        help='the data store to store/access tweets from.'
+                        'Accepted values are "mongo" and "redis". If no '
+                        'argument given, default to the text file.')
+    parser.add_argument('-f', '--tweetfile', help='file to store/access '
+                        'tweets from')
+    parser.add_argument('-u', '--url', help='url to text file '
+                        'containing dril tweets')
+    parser.add_argument('-c', '--color', help='color to print tweets. '
+                        'defaults to your terminal\'s default text color')
+    parser.add_argument('-y', '--say', action='store_true', 
+                        help='say the tweet aloud')
     args = parser.parse_args()
 
     tweet_file = args.tweetfile if args.tweetfile else TWEET_FILE_NAME
     tweet_url = args.url if args.url else TWEET_URL_NAME
+    data_source = args.data_source.lower() if args.data_source else ''
 
     if not os.path.exists(tweet_file):
         get_dril_tweets(tweet_url, tweet_file)
     else:
         update_tweet_file(tweet_file, tweet_url)
 
-    if args.data_source.lower() == 'mongo':
+    if data_source.lower() == 'mongo':
         add_tweets_to_mongodb(tweet_file)
-        print(random_dril_tweet_from_mongodb())
-    elif args.data_source.lower() == 'redis':
+        tweet = random_dril_tweet_from_mongodb()
+    elif data_source.lower() == 'redis':
         add_tweets_to_redis(tweet_file)
-        print(random_dril_tweet_from_redis())
+        tweet = random_dril_tweet_from_redis()
     else:
-        print(random_dril_tweet(tweet_file))
+        tweet = random_dril_tweet(tweet_file)
+
+    if args.say:
+        subprocess.call('say {}'.format(tweet), shell=True)
+
+    print(tweet)
 
     sys.exit(0)
 
